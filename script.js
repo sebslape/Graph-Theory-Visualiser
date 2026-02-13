@@ -1,6 +1,8 @@
 const canvas = document.querySelector("canvas");
 const ctx = canvas.getContext('2d');
 
+const clearButton = document.getElementById("clear");
+
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
@@ -15,11 +17,27 @@ class Node {
 let nodes = [];
 let currentValue = 0;
 
+let edgeStartNode = null;
+let edgeEndNode = null;
+
+let draggedNode = null;
+
 const RADIUS = 30;
+
+clearButton.onclick = function() {
+    nodes = [];
+    currentValue = 0;
+    draw();
+};
 
 window.addEventListener("resize", function(e) {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+    draw();
+});
+
+canvas.addEventListener("mouseup", function(e) {
+    draggedNode = null;
     draw();
 });
 
@@ -29,12 +47,27 @@ canvas.addEventListener("mousedown", function(e) {
 
     // Left Click
     if (e.button === 0) {
-        nodes.push(new Node(currentValue, x, y))
-        currentValue += 1;
+        let node = getNodeAtPosition(x, y);
+        if (node == null) {
+            nodes.push(new Node(currentValue, x, y))
+            currentValue += 1;
+        } else {
+            draggedNode = node;
+        }
     }
     
     draw();
-})
+});
+
+canvas.addEventListener("mousemove", function(e) {
+    if (draggedNode != null) {
+        let x = e.clientX;
+        let y = e.clientY;
+        draggedNode.x = x;
+        draggedNode.y = y;
+        draw();
+    }
+});
 
 function draw() {
     // Draw background
@@ -56,7 +89,14 @@ function draw() {
         ctx.font = "20px Arial";
         ctx.fillText(node.value,node.x,node.y);
     })
-    ctx.beginPath();
-    ctx.arc(95, 50, 40, 0, 2 * Math.PI);
-    ctx.stroke();
+}
+
+function getNodeAtPosition(x, y) {
+    RADIUS_SQUARED = RADIUS ** 2;
+    return nodes.find(node => {
+        let distance = (node.x - x) ** 2 + (node.y - y) ** 2;
+        if (distance < RADIUS_SQUARED) {
+            return node;
+        }
+    }) || null;
 }
