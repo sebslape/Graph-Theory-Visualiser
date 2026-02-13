@@ -14,7 +14,19 @@ class Node {
     }
 }
 
+class Edge {
+    constructor(startNode, endNode, weight) {
+        this.startNode = startNode;
+        this.endNode = endNode;
+        this.weight = weight;
+    }
+}
+
+let mouseX;
+let mouseY;
+
 let nodes = [];
+let edges = [];
 let currentValue = 0;
 
 let edgeStartNode = null;
@@ -24,8 +36,11 @@ let draggedNode = null;
 
 const RADIUS = 30;
 
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+
 clearButton.onclick = function() {
     nodes = [];
+    edges = [];
     currentValue = 0;
     draw();
 };
@@ -37,34 +52,48 @@ window.addEventListener("resize", function(e) {
 });
 
 canvas.addEventListener("mouseup", function(e) {
+    if (edgeStartNode != null) {
+        node = getNodeAtPosition(mouseX, mouseY);
+        if (node != null) {
+            edgeEndNode = node;
+            edges.push(new Edge(edgeStartNode, edgeEndNode, 1))
+            console.log(edges);
+        }
+    }
+    edgeStartNode = null;
+    edgeEndNode = null;
     draggedNode = null;
     draw();
 });
 
 canvas.addEventListener("mousedown", function(e) {
-    let x = e.clientX;
-    let y = e.clientY;
-
     // Left Click
     if (e.button === 0) {
-        let node = getNodeAtPosition(x, y);
+        let node = getNodeAtPosition(mouseX, mouseY);
         if (node == null) {
-            nodes.push(new Node(currentValue, x, y))
+            nodes.push(new Node(currentValue, mouseX, mouseY))
             currentValue += 1;
         } else {
             draggedNode = node;
         }
+    } else if (e.button === 2) {
+        let node = getNodeAtPosition(mouseX, mouseY);
+        if (node != null) {
+            edgeStartNode = node;
+            console.log(edgeStartNode);
+        }
     }
-    
     draw();
 });
 
 canvas.addEventListener("mousemove", function(e) {
+    mouseX = e.clientX;
+    mouseY = e.clientY;
     if (draggedNode != null) {
-        let x = e.clientX;
-        let y = e.clientY;
-        draggedNode.x = x;
-        draggedNode.y = y;
+        draggedNode.x = mouseX;
+        draggedNode.y = mouseY;
+        draw();
+    } else if (edgeStartNode != null) {
         draw();
     }
 });
@@ -74,12 +103,33 @@ function draw() {
     ctx.fillStyle = "#222222";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // Draw edges
+    ctx.lineWidth = 4;
+    edges.forEach(edge => {
+        ctx.strokeStyle = "#444444";
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.moveTo(edge.startNode.x, edge.startNode.y);
+        ctx.lineTo(edge.endNode.x, edge.endNode.y);
+        ctx.stroke();
+    });
+
+    // Draw line when dragging edge
+    if (edgeStartNode != null) {
+        ctx.strokeStyle = "#666666";
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath();
+        ctx.moveTo(edgeStartNode.x, edgeStartNode.y);
+        ctx.lineTo(mouseX, mouseY);
+        ctx.stroke();
+    }
+
     // Draw nodes
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     nodes.forEach(node => {
         // Draw Circle
-        ctx.fillStyle = "#777777";
+        ctx.fillStyle = "#999999";
         ctx.beginPath();
         ctx.arc(node.x, node.y, RADIUS, 0, 2 * Math.PI);
         ctx.fill();
@@ -88,7 +138,7 @@ function draw() {
         ctx.fillStyle = "#000";
         ctx.font = "20px Arial";
         ctx.fillText(node.value,node.x,node.y);
-    })
+    });
 }
 
 function getNodeAtPosition(x, y) {
