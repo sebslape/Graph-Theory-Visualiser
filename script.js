@@ -26,19 +26,24 @@ class Edge {
     }
 }
 
+// Input
 let mouseX;
 let mouseY;
 
 let nodes = [];
 let edges = [];
+
+// Directed
 let directed_adjacency = new Map();
+
+// Undirected
 let undirected_adjacency = new Map();
 
 let currentValue = 0;
 
+// State
 let edgeStartNode = null;
 let edgeEndNode = null;
-
 let draggedNode = null;
 
 const RADIUS = 30;
@@ -68,12 +73,16 @@ window.addEventListener("resize", function(e) {
 canvas.addEventListener("mouseup", function(e) {
     if (edgeStartNode != null) {
         node = getNodeAtPosition(mouseX, mouseY);
-        if (node != null) {
+        if (node != null && node != edgeStartNode) {
             edgeEndNode = node;
-            edges.push(new Edge(edgeStartNode, edgeEndNode, 1))
-            directed_adjacency.get(edgeStartNode).push({node: edgeEndNode, weight: 1});
-            //undirected_adjacency.get(edgeStartNode).push({node: edgeEndNode, weight: 1});
-            //undirected_adjacency.get(edgeEndNode).push({node: edgeStartNode, weight: 1});
+            const weightInput = prompt("Enter edge weight:", "1");
+            const chosenWeight = parseInt(weightInput);
+
+            edges.push(new Edge(edgeStartNode, edgeEndNode, chosenWeight))
+            directed_adjacency.get(edgeStartNode).set(edgeEndNode, {weight: chosenWeight});
+
+            //undirected_adjacency.get(edgeStartNode).set(edgeEndNode, {weight: 1});
+            //undirected_adjacency.get(edgeEndNode).set({edgeStartNode, {weight: 1});
         }
     }
     edgeStartNode = null;
@@ -89,7 +98,7 @@ canvas.addEventListener("mousedown", function(e) {
         if (node == null) {
             new_node = new Node(currentValue, mouseX, mouseY)
             nodes.push(new_node)
-            directed_adjacency.set(new_node, []);
+            directed_adjacency.set(new_node, new Map());
             currentValue += 1;
         } else {
             draggedNode = node;
@@ -101,6 +110,28 @@ canvas.addEventListener("mousedown", function(e) {
         }
     }
     draw();
+});
+
+canvas.addEventListener('dblclick', function(e) {
+    let node = getNodeAtPosition(mouseX, mouseY);
+    if (node != null) {
+        const index = nodes.indexOf(node);
+        if (index > -1) {
+            // Delete node from nodes
+            nodes.splice(index, 1);
+
+            // Delete all edges which contain this node
+            edges = edges.filter(edge => edge.startNode != node && edge.endNode != node);
+
+            // Delete all edges containing this node from adjacency lists
+            directed_adjacency.delete(node);
+            for (const [startNode, adjMap] of directed_adjacency) {
+                adjMap.delete(node);
+            }
+
+            draw();
+        }
+    }
 });
 
 canvas.addEventListener("mousemove", function(e) {
@@ -129,6 +160,21 @@ function draw() {
         ctx.moveTo(edge.startNode.x, edge.startNode.y);
         ctx.lineTo(edge.endNode.x, edge.endNode.y);
         ctx.stroke();
+        let averageX = (edge.startNode.x + edge.endNode.x) / 2;
+        let averageY = (edge.startNode.y + edge.endNode.y) / 2;
+
+        ctx.font = "20px Arial";
+        const metrics = ctx.measureText(edge.weight);
+        const textWidth = metrics.width;
+        const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
+
+        ctx.fillStyle = "#444444";
+        ctx.fillRect(averageX - (textWidth + 10) / 2, averageY - (textHeight + 10) / 2, textWidth + 10, textHeight + 10);
+
+        // Draw Text
+        ctx.fillStyle = "#000";
+        ctx.font = "20px Arial";
+        ctx.fillText(edge.weight,averageX,averageY);
     });
 
     // Draw line when dragging edge
@@ -193,9 +239,10 @@ async function dfs() {
         let neighbours = directed_adjacency.get(currentNode);
 
         for (const neighbour of neighbours) {
-            if (!visited.has(neighbour.node)) {
-                visited.add(neighbour.node);
-                stack.push(neighbour.node);
+            let neighbourNode = neighbour[0];
+            if (!visited.has(neighbourNode)) {
+                visited.add(neighbourNode);
+                stack.push(neighbourNode);
             }
         }
 
@@ -223,12 +270,14 @@ async function bfs() {
         currentNode.colour = "selected";
 
         let neighbours = directed_adjacency.get(currentNode);
+        console.log(neighbours);
 
         for (const neighbour of neighbours) {
-            if (!visited.has(neighbour.node)) {
-                neighbour.node.colour = "queued";
-                visited.add(neighbour.node);
-                queue.push(neighbour.node);
+            let neighbourNode = neighbour[0];
+            if (!visited.has(neighbourNode)) {
+                neighbourNode.colour = "queued";
+                visited.add(neighbourNode);
+                queue.push(neighbourNode);
             }
         }
 
