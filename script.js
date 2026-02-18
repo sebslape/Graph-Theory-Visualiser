@@ -5,6 +5,7 @@ const clearButton = document.getElementById("clear");
 const clearColoursButton = document.getElementById("clear-colours");
 const dfsButton = document.getElementById("dfs");
 const bfsButton = document.getElementById("bfs");
+const dijkstraButton = document.getElementById("dijkstra");
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
@@ -23,6 +24,7 @@ class Edge {
         this.startNode = startNode;
         this.endNode = endNode;
         this.weight = weight;
+        this.colour = "default";
     }
 }
 
@@ -33,11 +35,7 @@ let mouseY;
 let nodes = [];
 let edges = [];
 
-// Directed
-let directed_adjacency = new Map();
-
-// Undirected
-let undirected_adjacency = new Map();
+let edgeMap = new Map();
 
 let currentValue = 0;
 
@@ -48,11 +46,43 @@ let draggedNode = null;
 
 const RADIUS = 30;
 
+function addEdge(startNode, endNode, weight) {
+    const edge = new Edge(startNode, endNode, weight);
+    edges.push(edge);
+    edgeMap.get(startNode).set(endNode, edge);
+}
+
+function getEdge(startNode, endNode) {
+    return edgeMap.get(startNode).get(endNode);
+}
+
+function deleteEdgesContainingNode(node) {
+    const index = nodes.indexOf(node);
+    if (index > -1) {
+        // Delete node from nodes
+        nodes.splice(index, 1);
+    }
+
+    // Delete all edges which contain this node
+    edges = edges.filter(edge => edge.startNode != node && edge.endNode != node);
+
+    // Delete all edges containing this node from adjacency list
+    edgeMap.delete(node);
+    for (const [startNode, adjMap] of edgeMap) {
+        adjMap.delete(node);
+        let otherNodeEdges = edgeMap.get(startNode);
+        otherNodeEdges.delete(node);
+    }
+}
+
 canvas.addEventListener("contextmenu", e => e.preventDefault());
 
 clearColoursButton.onclick = function() {
     nodes.forEach(node => {
         node.colour = "default";
+    });
+    edges.forEach(edge => {
+        edge.colour = "default";
     });
     draw();
 };
@@ -77,12 +107,7 @@ canvas.addEventListener("mouseup", function(e) {
             edgeEndNode = node;
             const weightInput = prompt("Enter edge weight:", "1");
             const chosenWeight = parseInt(weightInput);
-
-            edges.push(new Edge(edgeStartNode, edgeEndNode, chosenWeight))
-            directed_adjacency.get(edgeStartNode).set(edgeEndNode, {weight: chosenWeight});
-
-            //undirected_adjacency.get(edgeStartNode).set(edgeEndNode, {weight: 1});
-            //undirected_adjacency.get(edgeEndNode).set({edgeStartNode, {weight: 1});
+            addEdge(edgeStartNode, edgeEndNode, chosenWeight);
         }
     }
     edgeStartNode = null;
@@ -96,9 +121,9 @@ canvas.addEventListener("mousedown", function(e) {
     if (e.button === 0) {
         let node = getNodeAtPosition(mouseX, mouseY);
         if (node == null) {
-            new_node = new Node(currentValue, mouseX, mouseY)
-            nodes.push(new_node)
-            directed_adjacency.set(new_node, new Map());
+            new_node = new Node(currentValue, mouseX, mouseY);
+            nodes.push(new_node);
+            edgeMap.set(new_node, new Map());
             currentValue += 1;
         } else {
             draggedNode = node;
@@ -115,22 +140,8 @@ canvas.addEventListener("mousedown", function(e) {
 canvas.addEventListener('dblclick', function(e) {
     let node = getNodeAtPosition(mouseX, mouseY);
     if (node != null) {
-        const index = nodes.indexOf(node);
-        if (index > -1) {
-            // Delete node from nodes
-            nodes.splice(index, 1);
-
-            // Delete all edges which contain this node
-            edges = edges.filter(edge => edge.startNode != node && edge.endNode != node);
-
-            // Delete all edges containing this node from adjacency lists
-            directed_adjacency.delete(node);
-            for (const [startNode, adjMap] of directed_adjacency) {
-                adjMap.delete(node);
-            }
-
-            draw();
-        }
+        deleteEdgesContainingNode(node);
+        draw();
     }
 });
 
@@ -154,7 +165,13 @@ function draw() {
     // Draw edges
     ctx.lineWidth = 4;
     edges.forEach(edge => {
-        ctx.strokeStyle = "#444444";
+        let colour = "#444444";
+
+        if (edge.colour == "found") {
+            colour = "#bcbc3d";
+        }
+
+        ctx.strokeStyle = colour;
         ctx.setLineDash([]);
         ctx.beginPath();
         ctx.moveTo(edge.startNode.x, edge.startNode.y);
@@ -168,7 +185,7 @@ function draw() {
         const textWidth = metrics.width;
         const textHeight = metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent;
 
-        ctx.fillStyle = "#444444";
+        ctx.fillStyle = colour;
         ctx.fillRect(averageX - (textWidth + 10) / 2, averageY - (textHeight + 10) / 2, textWidth + 10, textHeight + 10);
 
         // Draw Text
@@ -236,8 +253,8 @@ async function dfs() {
 
         currentNode.colour = "selected";
 
-        let neighbours = directed_adjacency.get(currentNode);
-
+        let neighbours = edgeMap.get(currentNode);
+        
         for (const neighbour of neighbours) {
             let neighbourNode = neighbour[0];
             if (!visited.has(neighbourNode)) {
@@ -252,7 +269,7 @@ async function dfs() {
         }
 
         draw();
-        await sleep(1000);
+        await sleep(500);
         currentNode.colour = "found";
     }
     draw();
@@ -269,8 +286,7 @@ async function bfs() {
 
         currentNode.colour = "selected";
 
-        let neighbours = directed_adjacency.get(currentNode);
-        console.log(neighbours);
+        let neighbours = edgeMap.get(currentNode);
 
         for (const neighbour of neighbours) {
             let neighbourNode = neighbour[0];
@@ -282,11 +298,86 @@ async function bfs() {
         }
 
         draw();
-        await sleep(1000);
+        await sleep(500);
         currentNode.colour = "found";
     }
     draw();
 }
 
+async function dijkstra() {
+    let distances = new Map();
+    let previous = new Map();
+    let queue = [];
+
+    for (const node of nodes) {
+        distances.set(node, Infinity);
+        previous.set(node, null);
+        queue.push(node);
+    }
+
+    let start = nodes[0];
+    distances.set(start, 0);
+
+    while (queue.length > 0) {
+        // Get node with minimum distance
+        let maxDistance = Infinity;
+        let minimumNode = null;
+        for (const node of queue) {
+            let nodeDistance = distances.get(node);
+            if (nodeDistance < maxDistance) {
+                maxDistance = nodeDistance;
+                minimumNode = node;
+            }
+        }
+
+        queue.splice(queue.indexOf(minimumNode), 1);
+
+        minimumNode.colour = "selected";
+
+        let neighbours = edgeMap.get(minimumNode);
+
+        for (const neighbour of neighbours) {
+            let neighbourNode = neighbour[0];
+            let info = neighbour[1];
+            let weight = info.weight;
+            
+            let alternativePath = distances.get(minimumNode) + weight;
+
+            await sleep(500);
+            
+            if (alternativePath < distances.get(neighbourNode)) {
+                neighbourNode.colour = "found";
+                distances.set(neighbourNode, alternativePath);
+                previous.set(neighbourNode, minimumNode);
+            }
+            draw();
+        }
+        draw();
+    }
+    draw();
+
+    let end = nodes[nodes.length - 1];
+    let next = end;
+    let curr = previous.get(end);
+
+    path = [end];
+
+    // Build path and colour edges
+    while (curr != null) {
+        let edge = getEdge(curr, next);
+        edge.colour = "found";
+        path.unshift(curr);
+        next = curr;
+        curr = previous.get(curr);
+    }
+
+    path.unshift(start);
+
+    console.log(path);
+    console.log(distances.get(end));
+    draw();
+}
+
 dfsButton.onclick = dfs;
 bfsButton.onclick = bfs;
+dijkstraButton.onclick = dijkstra;
